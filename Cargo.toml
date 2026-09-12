@@ -1,0 +1,8 @@
+[package]
+name = "zsnow"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.13.2"
+libc = "0.2.189"
