@@ -129,7 +129,7 @@ impl Rgb {
     pub const fn from_u32(color: u32) -> Self {
         Self {
             r: ((color >> 16) & 0xFF) as u8,
-            g: ((color >>  0) & 0xFF) as u8,
+            g: ((color >>  8) & 0xFF) as u8,
             b: (color         & 0xFF) as u8,
         }
     }
@@ -142,6 +142,22 @@ impl Rgb {
     #[inline]
     pub const fn to_color(&self) -> Color {
         Color::Rgb { r: self.r, g: self.g, b: self. b }
+    }
+
+    #[inline]
+    pub fn blend(&self, other: Rgb, alpha: u8) -> Rgb {
+        let mut rgb = self.clone();
+        rgb.blend_assign(other, alpha);
+        rgb
+    }
+
+    #[inline]
+    pub fn blend_assign(&mut self, other: Rgb, alpha: u8) {
+        let alpha = alpha as u32;
+        let inv_alpha = 0xFF - alpha;
+        self.r = ((self.r as u32 * inv_alpha + other.r as u32 * alpha) / 0xFF) as u8;
+        self.g = ((self.g as u32 * inv_alpha + other.g as u32 * alpha) / 0xFF) as u8;
+        self.b = ((self.b as u32 * inv_alpha + other.b as u32 * alpha) / 0xFF) as u8;
     }
 }
 

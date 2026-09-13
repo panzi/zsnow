@@ -1,4 +1,4 @@
-use std::{io::{BufWriter, ErrorKind, Write}, mem::MaybeUninit, os::fd::RawFd, sync::atomic::{AtomicU32, Ordering}};
+use std::{io::{BufWriter, ErrorKind, Write}, mem::MaybeUninit, os::fd::RawFd, sync::atomic::{AtomicU32, Ordering}, time::Duration};
 
 use crate::{ansi_codes::{BG_DEFAULT, BOLD, CLEAR_LINE, CLEAR_LINE_TO_END, CLEAR_LINE_TO_START, CLEAR_SCREEN, CLEAR_STYLE, DOUBLY_UNDERLINE, FAINT, FG_DEFAULT, ITALIC, NORMAL_INTENSITY, NOT_ITALIC, NOT_UNDERLINE, UNDERLINE}, borrowed_fd::BorrowedFd, color::{Color, Color16, Rgb}, epoll::{EPoll, Events}, event::{ESCAPE, ESCAPE_EVENT, Event, Key, MOUSE_MASK_ALT, MOUSE_MASK_CTRL, MOUSE_MASK_MOVE, MOUSE_MASK_SHIFT, MOUSE_MASK_UNKNOWN, MOUSE_MASK_WHEEL, MouseButton}, style::{FontStyle, FontWeight, TextDecoration}};
 
@@ -566,7 +566,7 @@ impl TermIO {
         }
 
         loop {
-            match self.epoll.wait(&mut self.events, None, None) {
+            match self.epoll.wait(&mut self.events, Some(Duration::ZERO), None) {
                 Ok(count) => {
                     if count == 0 {
                         return Ok(None);

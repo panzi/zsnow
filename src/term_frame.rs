@@ -1,15 +1,15 @@
-use crate::{color::Rgb, draw_mode::DrawMode, rgb_image::RgbImage, size2d::Size2D, termio::TermIO};
+use crate::{color::Rgb, draw_mode::DrawMode, rect::Rect, rgb_image::RgbImage, size2d::Size2D, termio::TermIO};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TermFrame {
-    data: Box<[TermChar]>,
+    data: Vec<TermChar>,
     size: Size2D,
 }
 
 impl TermFrame {
     #[inline]
     pub fn new(size: Size2D) -> Self {
-        let data = vec![TermChar::default(); size.width * size.height].into_boxed_slice();
+        let data = vec![TermChar::default(); size.width * size.height];
         Self { data, size }
     }
 
@@ -21,6 +21,69 @@ impl TermFrame {
     #[inline]
     pub fn size(&self) -> &Size2D {
         &self.size
+    }
+
+    #[inline]
+    pub fn resize(&mut self, size: &Size2D) {
+        self.data.resize(size.width * size.height, TermChar::default());
+        self.size = *size;
+    }
+
+    #[inline]
+    pub fn fill(&mut self, value: TermChar) {
+        self.data.fill(value);
+    }
+
+    pub fn fill_rect(&mut self, rect: &Rect, value: &TermChar) {
+        let &Rect { x, y, mut width, mut height } = rect;
+
+        let y = if y < 0 {
+            if -y as usize >= height {
+                return;
+            }
+
+            height -= -y as usize;
+            0
+        } else {
+            y as usize
+        };
+
+        if y >= self.size.height {
+            return;
+        }
+
+        if y + height > self.size.height {
+            height = self.size.height - y;
+        }
+
+        let x = if x < 0 {
+            if -x as usize >= width {
+                return;
+            }
+
+            width -= -x as usize;
+            0
+        } else {
+            x as usize
+        };
+
+        if x >= self.size.width {
+            return;
+        }
+
+        if x + width > self.size.width {
+            width = self.size.width - x;
+        }
+
+        if x == 0 && width == self.size.width {
+            let start = y * self.size.width;
+            self.data[start..start + self.size.width * height].fill(*value);
+        } else {
+            for y in y..y + height {
+                let start = y * self.size.width + x;
+                self.data[start..start + width].fill(*value);
+            }
+        }
     }
 
     pub fn draw(&mut self, column: usize, row: usize, image: &RgbImage, draw_mode: DrawMode) {
@@ -36,7 +99,7 @@ impl TermFrame {
             return;
         }
 
-        let columns = image.size().width.div_ceil(2);
+        let columns = image.size().width;
         let rows = image.size().height.div_ceil(2);
 
         let columns = if column + columns > self.size.width {
@@ -51,14 +114,35 @@ impl TermFrame {
             rows
         };
 
-        for row in row..row + rows {
-            let index = row * self.size.width + column;
-            let term_row = &mut self.data[index..index + columns];
+        for term_row_index in row..row + rows {
+            let term_slice_index = term_row_index * self.size.width + column;
+            let term_row = &mut self.data[term_slice_index..term_slice_index + columns];
 
-            // TODO
+            let line_index = term_row_index * 2;
+            let line1 = image.get_line(line_index);
+            let line2 = image.get_line(line_index + 1);
+            let mut curr_fg = None;
+            let mut curr_bg = None;
+
+            for ((term_cell, &color1), &color2) in term_row.iter_mut().zip(line1).zip(line2) {
+                if color1 == color2 {
+                    term_cell.fg = color1;
+                    term_cell.bg = curr_bg.unwrap_or(color1);
+                    term_cell.c = FULL_BLOCK;
+                } else if Some(color1) == curr_fg || Some(color2) == curr_bg {
+                    term_cell.fg = color1;
+                    term_cell.bg = color2;
+                    term_cell.c = UPPER_HALF_BLOCK;
+                } else /* if Some(color2) == curr_fg || Some(color1) == curr_bg */ {
+                    term_cell.fg = color2;
+                    term_cell.bg = color1;
+                    term_cell.c = LOWER_HALF_BLOCK;
+                }
+
+                curr_fg = Some(term_cell.fg);
+                curr_bg = Some(term_cell.bg);
+            }
         }
-
-        unimplemented!()
     }
 
     pub fn draw_two_by_three(&mut self, column: usize, row: usize, image: &RgbImage) {
@@ -67,6 +151,18 @@ impl TermFrame {
 
     pub fn draw_braille(&mut self, column: usize, row: usize, image: &RgbImage) {
         unimplemented!()
+    }
+
+    #[inline]
+    pub fn get_row(&self, index: usize) -> &[TermChar] {
+        let term_slice_index = index * self.size.width;
+        &self.data[term_slice_index..term_slice_index + self.size.width]
+    }
+
+    #[inline]
+    pub fn get_row_mut(&mut self, index: usize) -> &mut [TermChar] {
+        let term_slice_index = index * self.size.width;
+        &mut self.data[term_slice_index..term_slice_index + self.size.width]
     }
 
     pub fn diff_redraw(&self, prev_frame: &TermFrame, termio: &mut TermIO) -> std::io::Result<()> {
@@ -186,12 +282,16 @@ impl Default for TermChar {
     }
 }
 
+const FULL_BLOCK: char = '\u{2588}';
+const UPPER_HALF_BLOCK: char = '\u{2580}';
+const LOWER_HALF_BLOCK: char = '\u{2584}';
+
 #[inline]
 pub fn get_bits_from_half_block(c: char) -> u32 {
     match c {
-        '\u{2580}' => 0b01, // upper half block
-        '\u{2584}' => 0b10, // lower half block
-        '\u{2588}' => 0b11, // full block
+        self::UPPER_HALF_BLOCK => 0b01,
+        self::LOWER_HALF_BLOCK => 0b10,
+        self::FULL_BLOCK => 0b11,
         _ => 0,
     }
 }
@@ -199,7 +299,7 @@ pub fn get_bits_from_half_block(c: char) -> u32 {
 #[inline]
 pub fn get_bits_from_two_by_three(c: char) -> u32 {
     match c {
-        '\u{2588}' => 0b11_11_11, // full block
+        self::FULL_BLOCK => 0b11_11_11,
         _ if c >= '\u{1FB00}' && c <= '\u{1FB3B}' => {
             let c: u32 = c.into();
             c + 1 - 0x1FB00
@@ -222,9 +322,9 @@ pub fn get_bits_from_braille(c: char) -> u32 {
 #[inline]
 pub fn get_half_block_from_bits(bits: u32) -> char {
     match bits & 0b11 {
-        0b01 => '\u{2580}',
-        0b10 => '\u{2584}',
-        0b11 => '\u{2580}',
+        0b01 => UPPER_HALF_BLOCK,
+        0b10 => LOWER_HALF_BLOCK,
+        0b11 => FULL_BLOCK,
         _ => ' ',
     }
 }
@@ -233,7 +333,7 @@ pub fn get_half_block_from_bits(bits: u32) -> char {
 pub fn get_two_by_three_from_bits(bits: u32) -> char {
     match bits & 0b11_11_11 {
         0 => ' ',
-        0b11_11_11 => '\u{2588}',
+        0b11_11_11 => FULL_BLOCK,
         bits => {
             unsafe { char::from_u32_unchecked(0x1FB00 + bits - 1) }
         },

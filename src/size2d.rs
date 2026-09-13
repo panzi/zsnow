@@ -1,7 +1,19 @@
+use crate::termio::WindowSize;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Size2D {
     pub width: usize,
     pub height: usize,
+}
+
+impl From<WindowSize> for Size2D {
+    #[inline]
+    fn from(value: WindowSize) -> Self {
+        Self {
+            width: value.columns as usize,
+            height: value.rows as usize,
+        }
+    }
 }
 
 impl std::ops::Mul for &Size2D {
