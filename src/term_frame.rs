@@ -187,18 +187,19 @@ impl TermFrame {
                     if x == 0 && prev_y + 1 == y {
                         termio.write_str("\n")?;
                     } else if prev_y == y {
-                        if prev_x + 1 == x {
+                        let curr_x = prev_x + 1;
+                        if curr_x == x {
                             // already at correct position
-                        } else if prev_x + 1 < x {
-                            termio.move_cursor_forward((x - (prev_x + 1)) as u32)?;
+                        } else if curr_x < x {
+                            termio.move_cursor_forward((x - curr_x) as u32)?;
                         } else {
-                            termio.move_cursor_back(((prev_x + 1) - x) as u32)?;
+                            termio.move_cursor_back((curr_x - x) as u32)?;
                         }
                     } else {
                         if x > u32::MAX as usize || y > u32::MAX as usize {
                             break;
                         }
-                        termio.move_cursor(x as u32, y as u32)?;
+                        termio.move_cursor(y as u32, x as u32)?;
                     }
 
                     prev_x = x;

@@ -164,7 +164,7 @@ fn main() -> std::io::Result<()> {
         termio.move_cursor(0, 0)?;
         termio.clear_style()?;
 
-        if full_redraw || true {
+        if full_redraw {
             termio.clear_screen()?;
             term_frame.full_redraw(&mut termio)?;
         } else {

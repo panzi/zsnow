@@ -144,15 +144,15 @@ impl Effect for SnowEffect {
                 p.alive = true;
                 //p.position.y = i as f32;
                 p.position.y = 0.0;
-                p.position.x = width * ((t * 10.0) % 1.0);
+                p.position.x = (width * ((t * 10.0) % 1.0) + i as f32) % width;
                 //p.position.x = i as f32;
                 let z = self.depth * ((t * 50.0) % 1.0);
                 let slowdown = 1.0 - z;
                 p.position.z = z * 255.0;
                 //p.velocity.x = self.dx * slowdown * (self.variation * ((t * 30.0) % 1.0));
                 //p.velocity.y = self.dy * slowdown * (self.variation * ((t * 30.0 + 5.0) % 1.0));
-                p.velocity.x = self.dx;
-                p.velocity.y = self.dy;
+                p.velocity.x = 1.0;
+                p.velocity.y = 1.0;
                 p.velocity.z = 0.0;
             }
             i += 1;
