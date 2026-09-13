@@ -181,7 +181,7 @@ impl TermFrame {
 
         let mut char_buf = [0u8; char::MAX_LEN_UTF8];
 
-        for (y, (row, prev_row)) in self.data.chunks(self.size.height).zip(prev_frame.data.chunks(prev_frame.size.height)).enumerate() {
+        for (y, (row, prev_row)) in self.data.chunks(self.size.width).zip(prev_frame.data.chunks(prev_frame.size.width)).enumerate() {
             for (x, (c, prev_c)) in row.iter().zip(prev_row.iter()).enumerate() {
                 if c != prev_c {
                     if x == 0 && prev_y + 1 == y {
@@ -238,7 +238,7 @@ impl TermFrame {
         let mut char_buf = [0u8; char::MAX_LEN_UTF8];
         let mut first = true;
 
-        for row in self.data.chunks(self.size.height) {
+        for row in self.data.chunks(self.size.width) {
             if first {
                 first = false;
             } else {

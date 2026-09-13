@@ -3,7 +3,7 @@ use std::{f32::consts::PI, time::Duration};
 use crate::{color::Rgb, rgb_image::RgbImage};
 
 pub trait Effect {
-    fn animate(&mut self, frame: &mut RgbImage, time: Duration);
+    fn animate(&mut self, frame: &mut RgbImage, frame_time: Duration);
 }
 
 #[derive(Debug, Clone)]
@@ -105,10 +105,15 @@ impl SnowEffect {
 }
 
 impl Effect for SnowEffect {
-    fn animate(&mut self, frame: &mut RgbImage, time: Duration) {
-        let t = time.as_secs_f32() * self.speed;
+    fn animate(&mut self, frame: &mut RgbImage, frame_time: Duration) {
+        let t = frame_time.as_secs_f32() * self.speed;
         let width = frame.size().width as f32;
         let height = frame.size().height as f32;
+
+        let mut i = 0;
+        let n = self.particles.len();
+
+        // TODO: z-ordering! (z-buffer?)
 
         for p in &mut self.particles {
             if p.alive {
@@ -137,23 +142,33 @@ impl Effect for SnowEffect {
                 }
             } else {
                 p.alive = true;
+                //p.position.y = i as f32;
                 p.position.y = 0.0;
                 p.position.x = width * ((t * 10.0) % 1.0);
+                //p.position.x = i as f32;
                 let z = self.depth * ((t * 50.0) % 1.0);
                 let slowdown = 1.0 - z;
                 p.position.z = z * 255.0;
-                p.velocity.x = self.dx * slowdown * (self.variation * ((t * 30.0) % 1.0));
-                p.velocity.y = self.dy * slowdown * (self.variation * ((t * 30.0 + 5.0) % 1.0));
+                //p.velocity.x = self.dx * slowdown * (self.variation * ((t * 30.0) % 1.0));
+                //p.velocity.y = self.dy * slowdown * (self.variation * ((t * 30.0 + 5.0) % 1.0));
+                p.velocity.x = self.dx;
+                p.velocity.y = self.dy;
                 p.velocity.z = 0.0;
             }
+            i += 1;
 
             if p.alive {
-                frame.set_pixel_alpha(
+                frame.set_pixel(
                     p.position.x as usize,
                     p.position.y as usize,
                     self.color,
-                    (255.0 - p.position.z) as u8,
                 );
+                //frame.set_pixel_alpha(
+                //    p.position.x as usize,
+                //    p.position.y as usize,
+                //    self.color,
+                //    (255.0 - p.position.z) as u8,
+                //);
             }
         }
     }

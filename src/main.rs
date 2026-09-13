@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::{thread::sleep, time::{Duration, Instant}};
 
 use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
@@ -68,6 +68,11 @@ fn main() -> std::io::Result<()> {
     let fg = Rgb::from_u32(0xffffff);
     let draw_mode = DrawMode::HalfBlock;
 
+    //if 1 == 1 {
+    //    println!("{} {} {}", bg, bg.to_hsl(), bg.to_hsl().to_rgb());
+    //    return Ok(());
+    //}
+
     let mut effect: Box<dyn Effect> = Box::new(
         SnowOptions::new().color(fg).build()
     );
@@ -77,6 +82,10 @@ fn main() -> std::io::Result<()> {
 
     let mut full_redraw = true;
     let mut winsize = *termio.window_size();
+
+    // winsize.rows = 8;
+    // winsize.columns = 16;
+    let orig_winsize = winsize;
 
     let mut term_frame = TermFrame::new(winsize.into());
     let mut prev_term_frame = term_frame.clone();
@@ -108,6 +117,28 @@ fn main() -> std::io::Result<()> {
                 Event::ConnectionClosed => {
                     break;
                 }
+                Event::KeyPress { key: Key::Char('-'), ctrl: false, alt, shift: false } => {
+                    if alt {
+                        winsize.rows = winsize.rows.saturating_sub(1);
+                    } else {
+                        winsize.columns = winsize.columns.saturating_sub(1);
+                    }
+                    full_redraw = true;
+                    term_frame.resize(&winsize.into());
+                    prev_term_frame.resize(term_frame.size());
+                    frame.resize(&(draw_mode.size() * term_frame.size()));
+                }
+                Event::KeyPress { key: Key::Char('+'), ctrl: false, alt, shift: false } => {
+                    if alt {
+                        winsize.rows = winsize.rows.saturating_add(1);
+                    } else {
+                        winsize.columns = winsize.columns.saturating_add(1);
+                    }
+                    full_redraw = true;
+                    term_frame.resize(&winsize.into());
+                    prev_term_frame.resize(term_frame.size());
+                    frame.resize(&(draw_mode.size() * term_frame.size()));
+                }
                 Event::KeyPress { key: Key::Char('q'), ctrl: false, alt: false, shift: false } => {
                     break;
                 }
@@ -118,9 +149,14 @@ fn main() -> std::io::Result<()> {
         }
 
         // animate
-        frame.fill(bg);
+        let t = ts_frame_start - ts_startup;
+        //let mut bg_hsl = Hsl::from_rgb(bg);
+        //bg_hsl.h = (bg_hsl.h + t.as_secs_f32() * 0.1) % 1.0;
+        //frame.fill(bg_hsl.to_rgb());
+        //frame.fill(bg);
+        frame.vgradient(Rgb::from_u32(0xAAAAFF), Rgb::from_u32(0x000000));
 
-        effect.animate(&mut frame, ts_frame_start - ts_startup);
+        effect.animate(&mut frame, frame_time);
 
         term_frame.draw(0, 0, &frame, draw_mode);
 
@@ -128,7 +164,7 @@ fn main() -> std::io::Result<()> {
         termio.move_cursor(0, 0)?;
         termio.clear_style()?;
 
-        if full_redraw {
+        if full_redraw || true {
             termio.clear_screen()?;
             term_frame.full_redraw(&mut termio)?;
         } else {
@@ -143,16 +179,23 @@ fn main() -> std::io::Result<()> {
         let ts_frame_end = Instant::now();
         let elapsed = ts_frame_end - ts_frame_start;
         if elapsed < frame_time {
-            if !interruptable_sleep(frame_time - elapsed) {
-                break;
-            }
+            sleep(frame_time - elapsed);
+
+            // XXX: Window resizing causes interrupt! duh!
+            // if !interruptable_sleep(frame_time - elapsed) {
+            //     break;
+            // }
         }
 
         ts_frame_start += frame_time;
     }
 
-    //drop(termio);
-    //eprintln!("TERM FRAME: {:?}", term_frame);
+    drop(termio);
+    eprintln!("orig_winsize: {orig_winsize}");
+    eprintln!("term_frame.size(): {:?}", term_frame.size());
+    eprintln!("frame.size(): {:?}", frame.size());
+    eprintln!("frame_time: {frame_time:?}");
+    //eprintln!("LAST FRAME:\n{}", frame);
 
     Ok(())
 }

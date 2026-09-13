@@ -134,6 +134,48 @@ impl Rgb {
         }
     }
 
+    pub const fn from_hsl(&Hsl { h, s, l }: &Hsl) -> Self {
+        // See: https://stackoverflow.com/a/9493060/277767
+
+        #[inline]
+        const fn hue_to_rgb(p: f32, q: f32, mut t: f32) -> f32 {
+            if t < 0.0 { t += 1.0; }
+            if t > 1.0 { t -= 1.0; }
+            if t < 1.0/6.0 { return p + (q - p) * 6.0 * t; }
+            if t < 1.0/2.0 { return q; }
+            if t < 2.0/3.0 { return p + (q - p) * (2.0/3.0 - t) * 6.0; }
+
+            p
+        }
+
+        let r;
+        let g;
+        let b;
+
+        if s == 0.0 {
+            // achromatic
+            r = l;
+            g = l;
+            b = l;
+        } else {
+            let q = if l < 0.5 {
+                l * (1.0 + s)
+            } else {
+                l + s - l * s
+            };
+            let p = 2.0 * l - q;
+            r = hue_to_rgb(p, q, h + 1.0/3.0);
+            g = hue_to_rgb(p, q, h);
+            b = hue_to_rgb(p, q, h - 1.0/3.0);
+        }
+
+        Rgb {
+            r: (r * 256.0).floor().min(255.0) as u8,
+            g: (g * 256.0).floor().min(255.0) as u8,
+            b: (b * 256.0).floor().min(255.0) as u8,
+        }
+    }
+
     #[inline]
     pub const fn to_u32(&self) -> u32 {
         ((self.r as u32) << 16) | ((self.g as u32) << 8) | (self.b as u32)
@@ -142,6 +184,11 @@ impl Rgb {
     #[inline]
     pub const fn to_color(&self) -> Color {
         Color::Rgb { r: self.r, g: self.g, b: self. b }
+    }
+
+    #[inline]
+    pub const fn to_hsl(&self) -> Hsl {
+        Hsl::from_rgb(*self)
     }
 
     #[inline]
@@ -161,6 +208,14 @@ impl Rgb {
     }
 }
 
+impl std::fmt::Display for Rgb {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let &Rgb { r, g, b } = self;
+        write!(f, "#{r:02X}{g:02X}{b:02X}")
+    }
+}
+
 impl From<u32> for Rgb {
     #[inline]
     fn from(value: u32) -> Self {
@@ -172,6 +227,97 @@ impl From<Rgb> for u32 {
     #[inline]
     fn from(value: Rgb) -> Self {
         value.to_u32()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Hsl {
+    pub h: f32,
+    pub s: f32,
+    pub l: f32,
+}
+
+impl Hsl {
+    #[inline]
+    pub const fn new(h: f32, s: f32, l: f32) -> Self {
+        Self { h, s, l }
+    }
+
+    pub const fn from_rgb(Rgb { r, g, b }: Rgb) -> Self {
+        // See: https://stackoverflow.com/a/9493060/277767
+
+        let r = r as f32 / 255.0;
+        let g = g as f32 / 255.0;
+        let b = b as f32 / 255.0;
+        let vmax = r.max(g).max(b);
+        let vmin = r.min(g).min(b);
+        let l = (vmin + vmax) * 0.5;
+
+        if vmax == vmin {
+            return Hsl { h: 0.0, s: 0.0, l };
+        }
+
+        let d = vmax - vmin;
+        let s = if l > 0.5 {
+            d / (2.0 - vmax - vmin)
+        } else {
+            d / (vmax + vmin)
+        };
+
+        let h = if vmax == r {
+            let h = (g - b) / d;
+            if g < b { h + 6.0 } else { h }
+        } else if vmax == g {
+            (b - r) / d + 2.0
+        } else {
+            (r - g) / d + 4.0
+        };
+
+        let h = h / 6.0;
+
+        Hsl { h, s, l }
+    }
+
+    #[inline]
+    pub const fn to_rgb(&self) -> Rgb {
+        Rgb::from_hsl(self)
+    }
+
+    #[inline]
+    pub fn blend(&self, other: Hsl, alpha: f32) -> Hsl {
+        let mut rgb = self.clone();
+        rgb.blend_assign(other, alpha);
+        rgb
+    }
+
+    #[inline]
+    pub fn blend_assign(&mut self, other: Hsl, alpha: f32) {
+        let inv_alpha = 1.0 - alpha;
+        self.h = self.h * inv_alpha + other.h * alpha;
+        self.s = self.s * inv_alpha + other.s * alpha;
+        self.l = self.l * inv_alpha + other.l * alpha;
+    }
+}
+
+impl std::fmt::Display for Hsl {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let &Hsl { h, s, l } = self;
+        write!(f, "hsl({h:?} {s:?} {l:?})")
+    }
+}
+
+impl From<&Hsl> for Rgb {
+    #[inline]
+    fn from(value: &Hsl) -> Self {
+        Rgb::from_hsl(value)
+    }
+}
+
+impl From<Rgb> for Hsl {
+    #[inline]
+    fn from(value: Rgb) -> Self {
+        Hsl::from_rgb(value)
     }
 }
 
