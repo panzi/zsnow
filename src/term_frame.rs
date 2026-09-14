@@ -192,7 +192,7 @@ impl TermFrame {
                 if c != prev_c {
                     if x == 0 && prev_y + 1 == y {
                         termio.write_str("\n")?;
-                    } else if prev_y == y {
+                    } else if prev_y == y && y != 0 {
                         let curr_x = prev_x + 1;
                         if curr_x == x {
                             // already at correct position
