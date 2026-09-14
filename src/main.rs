@@ -1,6 +1,6 @@
 use std::{thread::sleep, time::{Duration, Instant}};
 
-use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
+use crate::{color::{Hsl, Rgb}, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
 pub mod ansi_codes;
 pub mod borrowed_fd;
@@ -9,6 +9,7 @@ pub mod draw_mode;
 pub mod effect;
 pub mod epoll;
 pub mod event;
+pub mod point3d;
 pub mod rect;
 pub mod rgb_image;
 pub mod size2d;
@@ -67,6 +68,12 @@ fn main() -> std::io::Result<()> {
     let bg = Rgb::from_u32(0x432d84);
     let fg = Rgb::from_u32(0xffffff);
     let draw_mode = DrawMode::HalfBlock;
+    let particle_count = 128;
+
+    let mut bg_hsl = Hsl::from_rgb(bg);
+    bg_hsl.l = 0.1;
+
+    let bg_bottom = bg_hsl.to_rgb();
 
     //if 1 == 1 {
     //    println!("{} {} {}", bg, bg.to_hsl(), bg.to_hsl().to_rgb());
@@ -74,11 +81,11 @@ fn main() -> std::io::Result<()> {
     //}
 
     let mut effect: Box<dyn Effect> = Box::new(
-        SnowOptions::new().color(fg).build()
+        SnowOptions::new().color(fg).particles(particle_count).build()
     );
 
     let mut termio = TermIO::from_tty()?;
-    let frame_time = Duration::from_secs(1) / fps;
+    let frame_duration = Duration::from_secs(1) / fps;
 
     let mut full_redraw = true;
     let mut winsize = *termio.window_size();
@@ -99,12 +106,19 @@ fn main() -> std::io::Result<()> {
     //     return Ok(());
     // }
 
-    let ts_startup = Instant::now();
+    let mut ts_startup = Instant::now();
     let mut ts_frame_start = ts_startup;
+    let mut paused = false;
 
     loop {
         // process input
-        if let Some(event) = termio.poll()? {
+        let event = if paused {
+            Some(termio.wait()?)
+        } else {
+            termio.poll()?
+        };
+
+        if let Some(event) = event {
             match event {
                 Event::WindowSize { rows, columns } => {
                     winsize.rows = rows;
@@ -117,30 +131,23 @@ fn main() -> std::io::Result<()> {
                 Event::ConnectionClosed => {
                     break;
                 }
-                Event::KeyPress { key: Key::Char('-'), ctrl: false, alt, shift: false } => {
-                    if alt {
-                        winsize.rows = winsize.rows.saturating_sub(1);
-                    } else {
-                        winsize.columns = winsize.columns.saturating_sub(1);
-                    }
-                    full_redraw = true;
-                    term_frame.resize(&winsize.into());
-                    prev_term_frame.resize(term_frame.size());
-                    frame.resize(&(draw_mode.size() * term_frame.size()));
-                }
-                Event::KeyPress { key: Key::Char('+'), ctrl: false, alt, shift: false } => {
-                    if alt {
-                        winsize.rows = winsize.rows.saturating_add(1);
-                    } else {
-                        winsize.columns = winsize.columns.saturating_add(1);
-                    }
-                    full_redraw = true;
-                    term_frame.resize(&winsize.into());
-                    prev_term_frame.resize(term_frame.size());
-                    frame.resize(&(draw_mode.size() * term_frame.size()));
-                }
                 Event::KeyPress { key: Key::Char('q'), ctrl: false, alt: false, shift: false } => {
                     break;
+                }
+                Event::KeyPress { key: Key::Char(' '), ctrl: false, alt: false, shift: false } => {
+                    if paused {
+                        paused = false;
+                        let now = Instant::now();
+                        ts_startup += now - ts_frame_start;
+                        ts_frame_start = now;
+                    } else {
+                        paused = true;
+                    }
+                }
+                Event::KeyPress { key: Key::Right, ctrl: false, alt: false, shift: false } => {
+                    if paused {
+                        ts_frame_start += frame_duration;
+                    }
                 }
                 _ => {
                     // TODO: other actions?
@@ -150,13 +157,12 @@ fn main() -> std::io::Result<()> {
 
         // animate
         let t = ts_frame_start - ts_startup;
-        //let mut bg_hsl = Hsl::from_rgb(bg);
         //bg_hsl.h = (bg_hsl.h + t.as_secs_f32() * 0.1) % 1.0;
         //frame.fill(bg_hsl.to_rgb());
         //frame.fill(bg);
-        frame.vgradient(Rgb::from_u32(0xAAAAFF), Rgb::from_u32(0x000000));
+        frame.vgradient(bg, bg_bottom);
 
-        effect.animate(&mut frame, frame_time);
+        effect.animate(&mut frame, frame_duration, t);
 
         term_frame.draw(0, 0, &frame, draw_mode);
 
@@ -176,25 +182,27 @@ fn main() -> std::io::Result<()> {
 
         full_redraw = false;
 
-        let ts_frame_end = Instant::now();
-        let elapsed = ts_frame_end - ts_frame_start;
-        if elapsed < frame_time {
-            sleep(frame_time - elapsed);
+        if !paused {
+            let ts_frame_end = Instant::now();
+            let elapsed = ts_frame_end - ts_frame_start;
+            if elapsed < frame_duration {
+                sleep(frame_duration - elapsed);
 
-            // XXX: Window resizing causes interrupt! duh!
-            // if !interruptable_sleep(frame_time - elapsed) {
-            //     break;
-            // }
+                // XXX: Window resizing causes interrupt! duh!
+                // if !interruptable_sleep(frame_time - elapsed) {
+                //     break;
+                // }
+            }
+
+            ts_frame_start += frame_duration;
         }
-
-        ts_frame_start += frame_time;
     }
 
     drop(termio);
     eprintln!("orig_winsize: {orig_winsize}");
     eprintln!("term_frame.size(): {:?}", term_frame.size());
     eprintln!("frame.size(): {:?}", frame.size());
-    eprintln!("frame_time: {frame_time:?}");
+    eprintln!("frame_time: {frame_duration:?}");
     //eprintln!("LAST FRAME:\n{}", frame);
 
     Ok(())

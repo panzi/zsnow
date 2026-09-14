@@ -166,6 +166,8 @@ impl TermFrame {
     }
 
     pub fn diff_redraw(&self, prev_frame: &TermFrame, termio: &mut TermIO) -> std::io::Result<()> {
+        // FIXME: frozen pixels at top of screen!
+
         if self.size != prev_frame.size {
             return self.full_redraw(termio);
         }
@@ -182,7 +184,11 @@ impl TermFrame {
         let mut char_buf = [0u8; char::MAX_LEN_UTF8];
 
         for (y, (row, prev_row)) in self.data.chunks(self.size.width).zip(prev_frame.data.chunks(prev_frame.size.width)).enumerate() {
+            let y = y as u32;
+
             for (x, (c, prev_c)) in row.iter().zip(prev_row.iter()).enumerate() {
+                let x = x as u32;
+
                 if c != prev_c {
                     if x == 0 && prev_y + 1 == y {
                         termio.write_str("\n")?;
@@ -191,15 +197,12 @@ impl TermFrame {
                         if curr_x == x {
                             // already at correct position
                         } else if curr_x < x {
-                            termio.move_cursor_forward((x - curr_x) as u32)?;
+                            termio.move_cursor_forward(x - curr_x)?;
                         } else {
-                            termio.move_cursor_back((curr_x - x) as u32)?;
+                            termio.move_cursor_back(curr_x - x)?;
                         }
                     } else {
-                        if x > u32::MAX as usize || y > u32::MAX as usize {
-                            break;
-                        }
-                        termio.move_cursor(y as u32, x as u32)?;
+                        termio.move_cursor(y, x)?;
                     }
 
                     prev_x = x;
@@ -207,11 +210,13 @@ impl TermFrame {
 
                     if Some(c.fg) != curr_fg {
                         termio.fg_rgb(c.fg)?;
+                        //termio.fg_rgb(Rgb::from_u32(0xFF0000))?;
                         curr_fg = Some(c.fg);
                     }
 
                     if Some(c.bg) != curr_bg {
                         termio.bg_rgb(c.bg)?;
+                        //termio.bg_rgb(Rgb::from_u32(0xFF7700))?;
                         curr_bg = Some(c.bg);
                     }
 
