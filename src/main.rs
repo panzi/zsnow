@@ -63,17 +63,19 @@ fn interruptable_sleep(duration: Duration) -> bool {
 }
 
 fn main() -> std::io::Result<()> {
-    // TODO: arguments
+    // TODO: parse arguments
     let fps = 60;
     let bg = Rgb::from_u32(0x432d84);
     let fg = Rgb::from_u32(0xffffff);
     let draw_mode = DrawMode::HalfBlock;
     let particle_count = 128;
 
-    let mut bg_hsl = Hsl::from_rgb(bg);
-    bg_hsl.l = 0.1;
-
-    let bg_bottom = bg_hsl.to_rgb();
+    let bg_bottom = bg
+        .to_hsl()
+        .map(|&Hsl { h, s, .. }|
+            Hsl { h, s: s * 0.8, l: 0.5 }
+        )
+        .to_rgb();
 
     //if 1 == 1 {
     //    println!("{} {} {}", bg, bg.to_hsl(), bg.to_hsl().to_rgb());
@@ -128,12 +130,6 @@ fn main() -> std::io::Result<()> {
                     prev_term_frame.resize(term_frame.size());
                     frame.resize(&(draw_mode.size() * term_frame.size()));
                 }
-                Event::ConnectionClosed => {
-                    break;
-                }
-                Event::KeyPress { key: Key::Char('q'), ctrl: false, alt: false, shift: false } => {
-                    break;
-                }
                 Event::KeyPress { key: Key::Char(' '), ctrl: false, alt: false, shift: false } => {
                     if paused {
                         paused = false;
@@ -144,10 +140,19 @@ fn main() -> std::io::Result<()> {
                         paused = true;
                     }
                 }
-                Event::KeyPress { key: Key::Right, ctrl: false, alt: false, shift: false } => {
-                    if paused {
-                        ts_frame_start += frame_duration;
-                    }
+                Event::KeyPress { key: Key::Char('+'), ctrl: false, alt, shift: false } => {
+                    let amount = if alt { 10 } else { 1 };
+                    effect.change_amount(amount);
+                }
+                Event::KeyPress { key: Key::Char('-'), ctrl: false, alt, shift: false } => {
+                    let amount = if alt { -10 } else { -1 };
+                    effect.change_amount(amount);
+                }
+                Event::KeyPress { key: Key::Char('q'), ctrl: false, alt: false, shift: false } => {
+                    break;
+                }
+                Event::ConnectionClosed => {
+                    break;
                 }
                 _ => {
                     // TODO: other actions?

@@ -166,8 +166,6 @@ impl TermFrame {
     }
 
     pub fn diff_redraw(&self, prev_frame: &TermFrame, termio: &mut TermIO) -> std::io::Result<()> {
-        // FIXME: frozen pixels at top of screen!
-
         if self.size != prev_frame.size {
             return self.full_redraw(termio);
         }

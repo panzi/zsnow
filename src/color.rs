@@ -206,6 +206,11 @@ impl Rgb {
         self.g = ((self.g as u32 * inv_alpha + other.g as u32 * alpha) / 0xFF) as u8;
         self.b = ((self.b as u32 * inv_alpha + other.b as u32 * alpha) / 0xFF) as u8;
     }
+
+    #[inline]
+    pub fn map<T>(&self, f: impl FnOnce(Self) -> T) -> T {
+        f(*self)
+    }
 }
 
 impl std::fmt::Display for Rgb {
@@ -296,6 +301,11 @@ impl Hsl {
         self.h = self.h * inv_alpha + other.h * alpha;
         self.s = self.s * inv_alpha + other.s * alpha;
         self.l = self.l * inv_alpha + other.l * alpha;
+    }
+
+    #[inline]
+    pub fn map<T>(&self, f: impl FnOnce(&Self) -> T) -> T {
+        f(self)
     }
 }
 

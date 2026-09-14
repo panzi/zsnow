@@ -1,9 +1,11 @@
-use std::{cmp::Ordering, f32::{self, consts::PI}, time::Duration};
+use std::{cmp::Ordering, f32::consts::TAU, time::Duration};
 
 use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
 
 pub trait Effect {
     fn animate(&mut self, frame: &mut RgbImage, frame_duration: Duration, current_time: Duration);
+
+    fn change_amount(&mut self, _amount: i32) {}
 }
 
 #[derive(Debug, Clone)]
@@ -32,8 +34,8 @@ impl SnowOptions {
     pub fn new() -> Self {
         Self {
             particles: 32,
-            speed: 10.0,
-            angle: PI * 0.35,
+            speed: 16.0,
+            angle: TAU * 15.0 / 180.0,
             depth: 1.0,
             variation: 0.25,
             color: Rgb::from_u32(0xFFFFFF),
@@ -109,6 +111,26 @@ impl SnowEffect {
 }
 
 impl Effect for SnowEffect {
+    fn change_amount(&mut self, amount: i32) {
+        if amount < 0 {
+            let amount = -amount as usize;
+            if amount >= self.particles.len() {
+                self.particles.clear();
+            } else {
+                self.particles.truncate(self.particles.len() - amount);
+            }
+            self.draw_order.truncate(self.particles.len());
+        } else {
+            // FIXME: adding particles doesn't work for some reason!
+            self.particles.resize_with(self.particles.len() + amount as usize, Particle::default);
+            self.draw_order.resize(self.particles.len(), 0);
+        }
+
+        for (i, draw_order) in self.draw_order.iter_mut().enumerate() {
+            *draw_order = i;
+        }
+    }
+
     fn animate(&mut self, frame: &mut RgbImage, frame_duration: Duration, current_time: Duration) {
         let t = current_time.as_secs_f32() * self.speed;
         let dt = frame_duration.as_secs_f32() * self.speed;
@@ -117,8 +139,6 @@ impl Effect for SnowEffect {
 
         let mut i = 0;
         let n = self.particles.len();
-
-        // TODO: z-ordering! (z-buffer?)
 
         for p in &mut self.particles {
             if p.alive {
@@ -152,20 +172,6 @@ impl Effect for SnowEffect {
                 } else {
                     p.rebirth(seed, self.depth, self.variation, &self.velocity, frame.size());
                 }
-
-                //p.alive = true;
-                ////p.position.y = i as f32;
-                //p.position.y = 0.0;
-                //p.position.x = (width * ((t * 10.0) % 1.0) + i as f32) % width;
-                ////p.position.x = i as f32;
-                //let z = self.depth * ((t * 50.0) % 1.0);
-                //let slowdown = 1.0 - z;
-                //p.position.z = z * 255.0;
-                ////p.velocity.x = self.dx * slowdown * (self.variation * ((t * 30.0) % 1.0));
-                ////p.velocity.y = self.dy * slowdown * (self.variation * ((t * 30.0 + 5.0) % 1.0));
-                //p.velocity.x = 1.0;
-                //p.velocity.y = 1.0;
-                //p.velocity.z = 0.0;
             }
             i += 1;
         }
@@ -178,11 +184,6 @@ impl Effect for SnowEffect {
             let p = &self.particles[index];
 
             if p.alive {
-                //frame.set_pixel(
-                //    p.position.x as usize,
-                //    p.position.y as usize,
-                //    self.color,
-                //);
                 frame.set_pixel_alpha(
                     p.position.x as usize,
                     p.position.y as usize,
@@ -232,8 +233,8 @@ impl Particle {
         let fwidth = screen.width as f32;
         let fheight = screen.height as f32;
 
-        self.position.x = fwidth * ((seed * 100.0) % 1.0);
-        self.position.y = fheight * ((seed * 135.0) % 1.0);
+        self.position.x = fwidth  * ((seed * 100.17) % 1.0);
+        self.position.y = fheight * ((seed * 135.31) % 1.0);
 
         self.init_z(seed, depth, velocity);
         self.init_velocity(seed, variation, velocity);
@@ -242,11 +243,9 @@ impl Particle {
     }
 
     pub fn rebirth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
-
-        // TODO: add some variation somehow!
-
-        let fwidth = screen.width as f32;
-        let fheight = screen.height as f32;
+        // scales sizes inversely to delta velocity
+        let fwidth  = screen.width as f32 / velocity.x;
+        let fheight = screen.height as f32 / velocity.y;
         let edge = fwidth + fheight;
         let spawn_pos = seed * edge;
 
@@ -255,18 +254,18 @@ impl Particle {
                 // spawn somewhere along left or top border
                 if spawn_pos >= fwidth {
                     self.position.x = 0.0;
-                    self.position.y = spawn_pos - fwidth;
+                    self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
-                    self.position.x = spawn_pos;
+                    self.position.x = spawn_pos * velocity.x;
                     self.position.y = 0.0;
                 }
             } else {
                 // spawn somewhere along left or bottom border
                 if spawn_pos >= fwidth {
                     self.position.x = 0.0;
-                    self.position.y = spawn_pos - fwidth;
+                    self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
-                    self.position.x = spawn_pos;
+                    self.position.x = spawn_pos * velocity.x;
                     self.position.y = fheight;
                 }
             }
@@ -275,18 +274,18 @@ impl Particle {
                 // spawn somewhere along right or top border
                 if spawn_pos >= fwidth {
                     self.position.x = fwidth;
-                    self.position.y = spawn_pos - fwidth;
+                    self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
-                    self.position.x = spawn_pos;
+                    self.position.x = spawn_pos * velocity.x;
                     self.position.y = 0.0;
                 }
             } else {
                 // spawn somewhere along right or bottom border
                 if spawn_pos >= fwidth {
                     self.position.x = fwidth;
-                    self.position.y = spawn_pos - fwidth;
+                    self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
-                    self.position.x = spawn_pos;
+                    self.position.x = spawn_pos * velocity.x;
                     self.position.y = fheight;
                 }
             }
