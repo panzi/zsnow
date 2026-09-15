@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::size2d::Size2D;
 
 
@@ -26,6 +28,34 @@ impl DrawMode {
             Self::HalfBlock  => &HALF_BLOCK_SIZE,
             Self::TwoByThree => &TWO_BY_THREE_SIZE,
             Self::Braille    => &BRAILLE_SIZE,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseDrawModeError;
+
+impl std::error::Error for ParseDrawModeError {}
+
+impl std::fmt::Display for ParseDrawModeError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "illegal draw mode".fmt(f)
+    }
+}
+
+impl FromStr for DrawMode {
+    type Err = ParseDrawModeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("halfblock") || s.eq_ignore_ascii_case("half-block") || s.eq_ignore_ascii_case("half_block") {
+            Ok(DrawMode::HalfBlock)
+        } else if s.eq_ignore_ascii_case("2by3") || s.eq_ignore_ascii_case("twobythree") || s.eq_ignore_ascii_case("two-by-three") || s.eq_ignore_ascii_case("two_by_three") {
+            Ok(DrawMode::TwoByThree)
+        } else if s.eq_ignore_ascii_case("braille") {
+            Ok(DrawMode::Braille)
+        } else {
+            Err(ParseDrawModeError)
         }
     }
 }

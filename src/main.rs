@@ -2,6 +2,8 @@ use std::{thread::sleep, time::{Duration, Instant}};
 
 use crate::{color::{Hsl, Rgb}, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
+use clap::Parser;
+
 pub mod ansi_codes;
 pub mod borrowed_fd;
 pub mod color;
@@ -62,13 +64,40 @@ fn interruptable_sleep(duration: Duration) -> bool {
     }
 }
 
+#[derive(Parser)]
+struct Args {
+    #[clap(short, long, default_value = "60")]
+    fps: u32,
+
+    #[clap(long, default_value = "#432d84")]
+    bg: Rgb,
+
+    #[clap(long, default_value = "#FFFFFF")]
+    fg: Rgb,
+
+    #[clap(long, default_value = "half_block")]
+    draw_mode: DrawMode,
+
+    #[clap(short = 'c', long, default_value = "128")]
+    particle_count: u32,
+
+    #[clap(long, default_value = "16.0")]
+    speed: f32,
+
+    #[clap(long, default_value = "30.0")]
+    angle: f32,
+
+    #[clap(long, default_value = "1.0")]
+    depth: f32,
+
+    #[clap(long, default_value = "0.25")]
+    variation: f32,
+}
+
 fn main() -> std::io::Result<()> {
+    let Args { fps, bg, fg, draw_mode, particle_count, speed, angle, depth, variation } = Args::parse();
+
     // TODO: parse arguments
-    let fps = 60;
-    let bg = Rgb::from_u32(0x432d84);
-    let fg = Rgb::from_u32(0xffffff);
-    let draw_mode = DrawMode::HalfBlock;
-    let particle_count = 128;
 
     let bg_bottom = bg
         .to_hsl()
@@ -83,7 +112,14 @@ fn main() -> std::io::Result<()> {
     //}
 
     let mut effect: Box<dyn Effect> = Box::new(
-        SnowOptions::new().color(fg).particles(particle_count).build()
+        SnowOptions::new()
+            .color(fg)
+            .particles(particle_count as usize)
+            .angle_grad(angle)
+            .depth(depth)
+            .variation(variation)
+            .speed(speed)
+            .build()
     );
 
     let mut termio = TermIO::from_tty()?;
@@ -94,7 +130,7 @@ fn main() -> std::io::Result<()> {
 
     // winsize.rows = 8;
     // winsize.columns = 16;
-    let orig_winsize = winsize;
+    // let orig_winsize = winsize;
 
     let mut term_frame = TermFrame::new(winsize.into());
     let mut prev_term_frame = term_frame.clone();
@@ -148,7 +184,7 @@ fn main() -> std::io::Result<()> {
                     let amount = if alt { -10 } else { -1 };
                     effect.change_amount(amount);
                 }
-                Event::KeyPress { key: Key::Char('q'), ctrl: false, alt: false, shift: false } => {
+                Event::KeyPress { key: Key::Char('q') | Key::Escape, ctrl: false, alt: false, shift: false } => {
                     break;
                 }
                 Event::ConnectionClosed => {
@@ -203,12 +239,12 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    drop(termio);
-    eprintln!("orig_winsize: {orig_winsize}");
-    eprintln!("term_frame.size(): {:?}", term_frame.size());
-    eprintln!("frame.size(): {:?}", frame.size());
-    eprintln!("frame_time: {frame_duration:?}");
-    //eprintln!("LAST FRAME:\n{}", frame);
+    //drop(termio);
+    //eprintln!("orig_winsize: {orig_winsize}");
+    //eprintln!("term_frame.size(): {:?}", term_frame.size());
+    //eprintln!("frame.size(): {:?}", frame.size());
+    //eprintln!("frame_time: {frame_duration:?}");
+    ////eprintln!("LAST FRAME:\n{}", frame);
 
     Ok(())
 }

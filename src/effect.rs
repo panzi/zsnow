@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, f32::consts::TAU, time::Duration};
+use std::{cmp::Ordering, f32::consts::PI, time::Duration};
 
 use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
 
@@ -35,7 +35,7 @@ impl SnowOptions {
         Self {
             particles: 32,
             speed: 16.0,
-            angle: TAU * 15.0 / 180.0,
+            angle: PI * 30.0 / 180.0,
             depth: 1.0,
             variation: 0.25,
             color: Rgb::from_u32(0xFFFFFF),
@@ -55,8 +55,14 @@ impl SnowOptions {
     }
 
     #[inline]
-    pub fn angle(&mut self, value: f32) -> &mut Self {
+    pub fn angle_rad(&mut self, value: f32) -> &mut Self {
         self.angle = value;
+        self
+    }
+
+    #[inline]
+    pub fn angle_grad(&mut self, value: f32) -> &mut Self {
+        self.angle = value * PI / 180.0;
         self
     }
 
@@ -252,7 +258,7 @@ impl Particle {
         if velocity.x >= 0.0 {
             if velocity.y >= 0.0 {
                 // spawn somewhere along left or top border
-                if spawn_pos >= fwidth {
+                if spawn_pos > fwidth {
                     self.position.x = 0.0;
                     self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
@@ -261,7 +267,7 @@ impl Particle {
                 }
             } else {
                 // spawn somewhere along left or bottom border
-                if spawn_pos >= fwidth {
+                if spawn_pos > fwidth {
                     self.position.x = 0.0;
                     self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
@@ -272,7 +278,7 @@ impl Particle {
         } else {
             if velocity.y >= 0.0 {
                 // spawn somewhere along right or top border
-                if spawn_pos >= fwidth {
+                if spawn_pos > fwidth {
                     self.position.x = fwidth;
                     self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {
@@ -281,7 +287,7 @@ impl Particle {
                 }
             } else {
                 // spawn somewhere along right or bottom border
-                if spawn_pos >= fwidth {
+                if spawn_pos > fwidth {
                     self.position.x = fwidth;
                     self.position.y = (spawn_pos - fwidth) * velocity.y;
                 } else {

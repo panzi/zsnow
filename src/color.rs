@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Color16 {
     Black,
@@ -112,7 +114,7 @@ impl Color16 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rgb {
     pub r: u8,
     pub g: u8,
@@ -221,6 +223,13 @@ impl std::fmt::Display for Rgb {
     }
 }
 
+impl std::fmt::Debug for Rgb {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
 impl From<u32> for Rgb {
     #[inline]
     fn from(value: u32) -> Self {
@@ -232,6 +241,54 @@ impl From<Rgb> for u32 {
     #[inline]
     fn from(value: Rgb) -> Self {
         value.to_u32()
+    }
+}
+
+#[derive(Debug)]
+pub struct ParseRgbError {
+    cause: Option<std::num::ParseIntError>,
+}
+
+impl std::error::Error for ParseRgbError {
+    #[inline]
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        if let Some(cause) = &self.cause {
+            return Some(cause);
+        }
+
+        None
+    }
+}
+
+impl std::fmt::Display for ParseRgbError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        "illegal RGB value".fmt(f)
+    }
+}
+
+impl From<std::num::ParseIntError> for ParseRgbError {
+    #[inline]
+    fn from(value: std::num::ParseIntError) -> Self {
+        Self { cause: Some(value) }
+    }
+}
+
+impl FromStr for Rgb {
+    type Err = ParseRgbError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() != 7 || !s.starts_with("#") {
+            return Err(ParseRgbError { cause: None });
+        }
+
+        let num = u32::from_str_radix(&s[1..], 16)?;
+
+        Ok(Rgb {
+            r: ((num >> 16) & 0xFF) as u8,
+            g: ((num >>  8) & 0xFF) as u8,
+            b: ( num        & 0xFF) as u8,
+        })
     }
 }
 
