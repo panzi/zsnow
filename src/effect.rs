@@ -115,6 +115,17 @@ impl SnowEffect {
             color: options.color,
         }
     }
+
+    #[inline]
+    pub fn set_angle_grad(&mut self, angle: f32) {
+        self.set_angle_rad(angle * PI / 180.0);
+    }
+
+    #[inline]
+    pub fn set_angle_rad(&mut self, angle: f32) {
+        self.velocity.x = angle.cos();
+        self.velocity.y = angle.sin();
+    }
 }
 
 impl Effect for SnowEffect {
@@ -146,10 +157,9 @@ impl Effect for SnowEffect {
         let width = screen.width as f32;
         let height = screen.height as f32;
 
-        let mut i = 0;
         let n = self.particles.len();
 
-        for p in &mut self.particles {
+        for (i, p) in self.particles.iter_mut().enumerate() {
             if p.alive {
                 p.position.x += p.velocity.x * dt;
                 p.position.y += p.velocity.y * dt;
@@ -182,7 +192,6 @@ impl Effect for SnowEffect {
                     p.rebirth(seed, self.depth, self.variation, &self.velocity, screen);
                 }
             }
-            i += 1;
         }
 
         self.draw_order.sort_by(|&lhs, &rhs|
@@ -230,7 +239,7 @@ impl Particle {
     fn init_velocity(&mut self, seed: f32, variation: f32, velocity: &Point3D) {
         let slowdown = 1.0 / self.position.z;
 
-        let var_angle = (seed - 0.5) * variation * std::f32::consts::TAU;
+        let var_angle = ((seed * 1.1731) % 1.0 - 0.5) * variation * std::f32::consts::PI;
 
         self.velocity = *velocity;
         let inv_var = 1.0 - variation;
@@ -255,49 +264,51 @@ impl Particle {
 
     pub fn rebirth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
         // scales sizes inversely to delta velocity
-        let fwidth  = screen.width as f32 / velocity.x;
-        let fheight = screen.height as f32 / velocity.y;
+        let fwidth  = screen.width as f32 * velocity.y;
+        let fheight = screen.height as f32 * velocity.x;
         let edge = fwidth + fheight;
         let spawn_pos = seed * edge;
+
+        // XXX: broken!
 
         if velocity.x >= 0.0 {
             if velocity.y >= 0.0 {
                 // spawn somewhere along left or top border
                 if spawn_pos > fwidth {
                     self.position.x = 0.0;
-                    self.position.y = (spawn_pos - fwidth) * velocity.y;
+                    self.position.y = (spawn_pos - fwidth) / velocity.x;
                 } else {
-                    self.position.x = spawn_pos * velocity.x;
+                    self.position.x = spawn_pos / velocity.y;
                     self.position.y = 0.0;
                 }
             } else {
                 // spawn somewhere along left or bottom border
                 if spawn_pos > fwidth {
                     self.position.x = 0.0;
-                    self.position.y = (spawn_pos - fwidth) * velocity.y;
+                    self.position.y = (spawn_pos - fwidth) / velocity.x;
                 } else {
-                    self.position.x = spawn_pos * velocity.x;
-                    self.position.y = fheight;
+                    self.position.x = spawn_pos / velocity.y;
+                    self.position.y = screen.height as f32;
                 }
             }
         } else {
             if velocity.y >= 0.0 {
                 // spawn somewhere along right or top border
                 if spawn_pos > fwidth {
-                    self.position.x = fwidth;
-                    self.position.y = (spawn_pos - fwidth) * velocity.y;
+                    self.position.x = screen.width as f32;
+                    self.position.y = (spawn_pos - fwidth) / velocity.x;
                 } else {
-                    self.position.x = spawn_pos * velocity.x;
+                    self.position.x = spawn_pos / velocity.y;
                     self.position.y = 0.0;
                 }
             } else {
                 // spawn somewhere along right or bottom border
                 if spawn_pos > fwidth {
-                    self.position.x = fwidth;
-                    self.position.y = (spawn_pos - fwidth) * velocity.y;
+                    self.position.x = screen.width as f32;
+                    self.position.y = (spawn_pos - fwidth) / velocity.x;
                 } else {
-                    self.position.x = spawn_pos * velocity.x;
-                    self.position.y = fheight;
+                    self.position.x = spawn_pos / velocity.y;
+                    self.position.y = screen.height as f32;
                 }
             }
         }

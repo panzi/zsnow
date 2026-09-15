@@ -263,7 +263,14 @@ impl std::error::Error for ParseRgbError {
 impl std::fmt::Display for ParseRgbError {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        "illegal RGB value".fmt(f)
+        "illegal RGB value".fmt(f)?;
+
+        if let Some(cause) = &self.cause {
+            ": ".fmt(f)?;
+            cause.fmt(f)?;
+        }
+
+        Ok(())
     }
 }
 

@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, thread::sleep, time::{Duration, Instant}};
 
-use crate::{color::{Hsl, Rgb}, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
+use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, fill::Fill, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
 use clap::Parser;
 
@@ -10,6 +10,7 @@ pub mod color;
 pub mod draw_mode;
 pub mod effect;
 pub mod epoll;
+pub mod fill;
 pub mod event;
 pub mod point3d;
 pub mod rect;
@@ -70,7 +71,7 @@ struct Args {
     fps: u32,
 
     #[clap(long, default_value = "#432d84")]
-    bg: Rgb,
+    bg: Fill,
 
     #[clap(long, default_value = "#FFFFFF")]
     fg: Rgb,
@@ -112,19 +113,12 @@ fn main() -> std::io::Result<()> {
 
     let log_timeout = Duration::from_secs(5);
 
-    let bg_bottom = bg
-        .to_hsl()
-        .map(|&Hsl { h, s, .. }|
-            Hsl { h, s: s * 0.8, l: 0.5 }
-        )
-        .to_rgb();
-
     //if 1 == 1 {
     //    println!("{} {} {}", bg, bg.to_hsl(), bg.to_hsl().to_rgb());
     //    return Ok(());
     //}
 
-    let mut effect: Box<dyn Effect> = Box::new(
+    let mut effect /*: Box<dyn Effect> = Box::new*/ = (
         SnowOptions::new()
             .color(fg)
             .particles(particle_count as usize)
@@ -147,7 +141,7 @@ fn main() -> std::io::Result<()> {
 
     let mut term_frame = TermFrame::new(winsize.into());
     let mut prev_term_frame = term_frame.clone();
-    let mut frame = RgbImage::new(draw_mode.size() * term_frame.size(), bg);
+    let mut frame = RgbImage::new(draw_mode.size() * term_frame.size(), Rgb::default());
 
     // if 1 == 1 {
     //     drop(termio);
@@ -162,6 +156,13 @@ fn main() -> std::io::Result<()> {
     let mut ts_startup = Instant::now();
     let mut ts_frame_start = ts_startup;
     let mut paused = false;
+    let mut osd = true;
+
+    let rad = angle * std::f32::consts::PI / 180.0;
+    log.push_back(LogEntry {
+        timestamp: ts_frame_start,
+        message: format!("angle: {angle}°, dx={:.3}, dy={:.3}", rad.cos(), rad.sin()),
+    });
 
     loop {
         // process input
@@ -215,10 +216,10 @@ fn main() -> std::io::Result<()> {
                         message: format!("removed {amount} particles, new total is {count}")
                     });
                 }
-                Event::KeyPress { key: Key::Char('q') | Key::Escape, ctrl: false, alt: false, shift: false } => {
-                    break;
+                Event::KeyPress { key: Key::Char('o'), ctrl: false, alt: false, shift: false } => {
+                    osd = !osd;
                 }
-                Event::ConnectionClosed => {
+                Event::KeyPress { key: Key::Char('q') | Key::Escape, ctrl: false, alt: false, shift: false } | Event::ConnectionClosed => {
                     break;
                 }
                 _ => {
@@ -232,7 +233,17 @@ fn main() -> std::io::Result<()> {
         //bg_hsl.h = (bg_hsl.h + t.as_secs_f32() * 0.1) % 1.0;
         //frame.fill(bg_hsl.to_rgb());
         //frame.fill(bg);
-        frame.vgradient(bg, bg_bottom);
+        match bg {
+            Fill::Solid(color) => {
+                frame.fill(color);
+            }
+            Fill::HorizontalGradient { left, right } => {
+                frame.hgradient(left, right);
+            }
+            Fill::VerticalGradient { top, bottom } => {
+                frame.vgradient(top, bottom);
+            }
+        }
 
         if !paused {
             effect.animate(frame.size(), frame_duration, t);
@@ -244,14 +255,16 @@ fn main() -> std::io::Result<()> {
 
         while log.pop_front_if(|entry| (ts_frame_start - entry.timestamp) >= log_timeout).is_some() {}
 
-        for (row, entry) in log.iter().skip(
-            if log.len() > term_frame.size().height {
-                log.len() - term_frame.size().height
-            } else {
-                0
-            }).enumerate() {
+        if osd {
+            for (row, entry) in log.iter().skip(
+                if log.len() > term_frame.size().height {
+                    log.len() - term_frame.size().height
+                } else {
+                    0
+                }).enumerate() {
 
-            term_frame.draw_text(0, row, fg, bg, &entry.message);
+                term_frame.draw_text(0, row, fg, bg.start(), &entry.message);
+            }
         }
 
         // draw to terminal
