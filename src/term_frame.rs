@@ -306,6 +306,16 @@ impl TermFrame {
         }
     }
 
+    pub fn draw_text(&mut self, column: usize, row: usize, fg: Rgb, bg: Rgb, text: &str) {
+        // assumes text is one line and each codepoint is 1 wide
+        let dest = &mut self.get_row_mut(row)[column..];
+        for (c, term_char) in text.chars().zip(dest.iter_mut()) {
+            term_char.fg = fg;
+            term_char.bg = bg;
+            term_char.c = c;
+        }
+    }
+
     #[inline]
     pub fn get_row(&self, index: usize) -> &[TermChar] {
         let term_slice_index = index * self.size.width;

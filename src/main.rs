@@ -1,4 +1,4 @@
-use std::{thread::sleep, time::{Duration, Instant}};
+use std::{collections::VecDeque, thread::sleep, time::{Duration, Instant}};
 
 use crate::{color::{Hsl, Rgb}, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
@@ -94,10 +94,23 @@ struct Args {
     variation: f32,
 }
 
+#[derive(Debug)]
+pub struct LogEntry {
+    pub timestamp: Instant,
+    pub message: String,
+}
+
+impl LogEntry {
+    #[inline]
+    pub fn new(message: String) -> Self {
+        Self { timestamp: Instant::now(), message }
+    }
+}
+
 fn main() -> std::io::Result<()> {
     let Args { fps, bg, fg, draw_mode, particle_count, speed, angle, depth, variation } = Args::parse();
 
-    // TODO: parse arguments
+    let log_timeout = Duration::from_secs(5);
 
     let bg_bottom = bg
         .to_hsl()
@@ -144,6 +157,8 @@ fn main() -> std::io::Result<()> {
     //     return Ok(());
     // }
 
+    let mut log = VecDeque::new();
+
     let mut ts_startup = Instant::now();
     let mut ts_frame_start = ts_startup;
     let mut paused = false;
@@ -165,12 +180,20 @@ fn main() -> std::io::Result<()> {
                     term_frame.resize(&winsize.into());
                     prev_term_frame.resize(term_frame.size());
                     frame.resize(&(draw_mode.size() * term_frame.size()));
+                    log.push_back(LogEntry {
+                        timestamp: ts_frame_start,
+                        message: format!("terminal size: {}, image size: {}", term_frame.size(), frame.size())
+                    });
                 }
                 Event::KeyPress { key: Key::Char(' '), ctrl: false, alt: false, shift: false } => {
                     if paused {
                         paused = false;
                         let now = Instant::now();
-                        ts_startup += now - ts_frame_start;
+                        let dt = now - ts_frame_start;
+                        ts_startup += dt;
+                        for entry in &mut log {
+                            entry.timestamp += dt;
+                        }
                         ts_frame_start = now;
                     } else {
                         paused = true;
@@ -178,11 +201,19 @@ fn main() -> std::io::Result<()> {
                 }
                 Event::KeyPress { key: Key::Char('+'), ctrl: false, alt, shift: false } => {
                     let amount = if alt { 10 } else { 1 };
-                    effect.change_amount(amount);
+                    let count = effect.change_amount(amount);
+                    log.push_back(LogEntry {
+                        timestamp: ts_frame_start,
+                        message: format!("added {amount} particles, new total is {count}")
+                    });
                 }
                 Event::KeyPress { key: Key::Char('-'), ctrl: false, alt, shift: false } => {
                     let amount = if alt { -10 } else { -1 };
-                    effect.change_amount(amount);
+                    let count = effect.change_amount(amount);
+                    log.push_back(LogEntry {
+                        timestamp: ts_frame_start,
+                        message: format!("removed {amount} particles, new total is {count}")
+                    });
                 }
                 Event::KeyPress { key: Key::Char('q') | Key::Escape, ctrl: false, alt: false, shift: false } => {
                     break;
@@ -203,9 +234,25 @@ fn main() -> std::io::Result<()> {
         //frame.fill(bg);
         frame.vgradient(bg, bg_bottom);
 
-        effect.animate(&mut frame, frame_duration, t);
+        if !paused {
+            effect.animate(frame.size(), frame_duration, t);
+        }
+
+        effect.draw(&mut frame);
 
         term_frame.draw(0, 0, &frame, draw_mode);
+
+        while log.pop_front_if(|entry| (ts_frame_start - entry.timestamp) >= log_timeout).is_some() {}
+
+        for (row, entry) in log.iter().skip(
+            if log.len() > term_frame.size().height {
+                log.len() - term_frame.size().height
+            } else {
+                0
+            }).enumerate() {
+
+            term_frame.draw_text(0, row, fg, bg, &entry.message);
+        }
 
         // draw to terminal
         termio.move_cursor(0, 0)?;

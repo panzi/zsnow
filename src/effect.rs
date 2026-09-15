@@ -3,9 +3,10 @@ use std::{cmp::Ordering, f32::consts::PI, time::Duration};
 use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
 
 pub trait Effect {
-    fn animate(&mut self, frame: &mut RgbImage, frame_duration: Duration, current_time: Duration);
+    fn animate(&mut self, screen: &Size2D, frame_duration: Duration, current_time: Duration);
+    fn draw(&self, frame: &mut RgbImage);
 
-    fn change_amount(&mut self, _amount: i32) {}
+    fn change_amount(&mut self, _amount: i32) -> u32 { 0 }
 }
 
 #[derive(Debug, Clone)]
@@ -117,7 +118,7 @@ impl SnowEffect {
 }
 
 impl Effect for SnowEffect {
-    fn change_amount(&mut self, amount: i32) {
+    fn change_amount(&mut self, amount: i32) -> u32 {
         if amount < 0 {
             let amount = -amount as usize;
             if amount >= self.particles.len() {
@@ -135,13 +136,15 @@ impl Effect for SnowEffect {
         for (i, draw_order) in self.draw_order.iter_mut().enumerate() {
             *draw_order = i;
         }
+
+        self.particles.len() as u32
     }
 
-    fn animate(&mut self, frame: &mut RgbImage, frame_duration: Duration, current_time: Duration) {
+    fn animate(&mut self, screen: &Size2D, frame_duration: Duration, current_time: Duration) {
         let t = current_time.as_secs_f32() * self.speed;
         let dt = frame_duration.as_secs_f32() * self.speed;
-        let width = frame.size().width as f32;
-        let height = frame.size().height as f32;
+        let width = screen.width as f32;
+        let height = screen.height as f32;
 
         let mut i = 0;
         let n = self.particles.len();
@@ -174,9 +177,9 @@ impl Effect for SnowEffect {
             } else {
                 let seed = (i as f32 / (n - 1) as f32 * width * 1.317 + t) % 1.0;
                 if t == 0.0 {
-                    p.birth(seed, self.depth, self.variation, &self.velocity, frame.size());
+                    p.birth(seed, self.depth, self.variation, &self.velocity, screen);
                 } else {
-                    p.rebirth(seed, self.depth, self.variation, &self.velocity, frame.size());
+                    p.rebirth(seed, self.depth, self.variation, &self.velocity, screen);
                 }
             }
             i += 1;
@@ -185,7 +188,9 @@ impl Effect for SnowEffect {
         self.draw_order.sort_by(|&lhs, &rhs|
             self.particles[rhs].position.z.partial_cmp(&self.particles[lhs].position.z).unwrap_or(Ordering::Equal)
         );
+    }
 
+    fn draw(&self, frame: &mut RgbImage) {
         for &index in &self.draw_order {
             let p = &self.particles[index];
 

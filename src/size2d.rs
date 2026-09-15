@@ -6,6 +6,13 @@ pub struct Size2D {
     pub height: usize,
 }
 
+impl std::fmt::Display for Size2D {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}x{}", self.width, self.height)
+    }
+}
+
 impl From<WindowSize> for Size2D {
     #[inline]
     fn from(value: WindowSize) -> Self {
