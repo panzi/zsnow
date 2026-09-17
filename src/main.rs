@@ -12,6 +12,8 @@ pub mod effect;
 pub mod epoll;
 pub mod fill;
 pub mod event;
+pub mod matrix2d;
+pub mod point2d;
 pub mod point3d;
 pub mod rect;
 pub mod rgb_image;
