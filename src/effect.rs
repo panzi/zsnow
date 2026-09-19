@@ -204,12 +204,16 @@ impl Effect for SnowEffect {
             let p = &self.particles[index];
 
             if p.alive {
-                frame.set_pixel_alpha(
-                    p.position.x as usize,
-                    p.position.y as usize,
-                    self.color,
-                    (255.0 - p.position.z * 255.0) as u8,
-                );
+                let Point3D { x, y, .. } = p.position;
+
+                if x >= 0.0 && y >= 0.0 {
+                    frame.set_pixel_alpha(
+                        x as usize,
+                        y as usize,
+                        self.color,
+                        (255.0 - p.position.z * 255.0) as u8,
+                    );
+                }
             }
         }
     }
