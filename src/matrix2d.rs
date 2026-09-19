@@ -46,46 +46,6 @@ impl Mul for &Matrix2d {
     }
 }
 
-pub trait Vector2d {
-    fn new(x: f32, y: f32) -> Self;
-    fn x(&self) -> f32;
-    fn y(&self) -> f32;
-}
-
-impl Vector2d for Point2D {
-    #[inline]
-    fn new(x: f32, y: f32) -> Self {
-        Point2D { x, y }
-    }
-
-    #[inline]
-    fn x(&self) -> f32 {
-        self.x
-    }
-
-    #[inline]
-    fn y(&self) -> f32 {
-        self.y
-    }
-}
-
-impl Vector2d for (f32, f32) {
-    #[inline]
-    fn new(x: f32, y: f32) -> Self {
-        (x, y)
-    }
-
-    #[inline]
-    fn x(&self) -> f32 {
-        self.0
-    }
-
-    #[inline]
-    fn y(&self) -> f32 {
-        self.1
-    }
-}
-
 impl Mul<&Point2D> for &Matrix2d {
     type Output = Point2D;
 
