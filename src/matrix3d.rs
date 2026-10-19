@@ -13,6 +13,15 @@ impl Matrix3d {
     ]);
 
     #[inline]
+    pub fn from_translation(x: f32, y: f32) -> Self {
+        Self([
+            1.0, 0.0, x,
+            0.0, 1.0, y,
+            0.0, 0.0, 1.0,
+        ])
+    }
+
+    #[inline]
     pub fn from_rotation_x(rad: f32) -> Self {
         let rad_sin = rad.sin();
         let rad_cos = rad.cos();
@@ -100,6 +109,33 @@ impl Mul for &Matrix3d {
             lhs[6] * rhs[1] + lhs[7] * rhs[4] + lhs[8] * rhs[7],
             lhs[6] * rhs[2] + lhs[7] * rhs[5] + lhs[8] * rhs[8],
         ])
+    }
+}
+
+impl Mul for Matrix3d {
+    type Output = Matrix3d;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
+}
+
+impl Mul<&Matrix3d> for Matrix3d {
+    type Output = Matrix3d;
+
+    #[inline]
+    fn mul(self, rhs: &Matrix3d) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl Mul<Matrix3d> for &Matrix3d {
+    type Output = Matrix3d;
+
+    #[inline]
+    fn mul(self, rhs: Matrix3d) -> Self::Output {
+        self * &rhs
     }
 }
 

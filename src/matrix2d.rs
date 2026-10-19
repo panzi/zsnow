@@ -46,6 +46,33 @@ impl Mul for &Matrix2d {
     }
 }
 
+impl Mul for Matrix2d {
+    type Output = Matrix2d;
+
+    #[inline]
+    fn mul(self, rhs: Self) -> Self::Output {
+        &self * &rhs
+    }
+}
+
+impl Mul<&Matrix2d> for Matrix2d {
+    type Output = Matrix2d;
+
+    #[inline]
+    fn mul(self, rhs: &Matrix2d) -> Self::Output {
+        &self * rhs
+    }
+}
+
+impl Mul<Matrix2d> for &Matrix2d {
+    type Output = Matrix2d;
+
+    #[inline]
+    fn mul(self, rhs: Matrix2d) -> Self::Output {
+        self * &rhs
+    }
+}
+
 impl Mul<&Point2D> for &Matrix2d {
     type Output = Point2D;
 
