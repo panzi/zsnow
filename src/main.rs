@@ -23,6 +23,7 @@ pub mod style;
 pub mod term_frame;
 pub mod termio;
 pub mod unicode;
+pub mod xorshift;
 
 //// debug input
 //fn main() -> std::io::Result<()> {
@@ -79,22 +80,25 @@ struct Args {
     #[clap(long, default_value = "#FFFFFF")]
     fg: Rgb,
 
-    #[clap(long, default_value = "half_block")]
+    #[clap(long, default_value_t = DrawMode::HalfBlock)]
     draw_mode: DrawMode,
 
-    #[clap(short = 'c', long, default_value = "128")]
+    #[clap(short = 'c', long, default_value_t = 128)]
     particle_count: u32,
 
-    #[clap(long, default_value = "16.0")]
+    #[clap(long, default_value_t = 16.0)]
     speed: f32,
 
-    #[clap(long, default_value = "30.0")]
+    #[clap(long, default_value_t = effect::RAND_INIT)]
+    seed: u32,
+
+    #[clap(long, default_value_t = 30.0)]
     angle: f32,
 
-    #[clap(long, default_value = "1.0")]
+    #[clap(long, default_value_t = 1.0)]
     depth: f32,
 
-    #[clap(long, default_value = "0.25")]
+    #[clap(long, default_value_t = 0.25)]
     variation: f32,
 }
 
@@ -112,7 +116,7 @@ impl LogEntry {
 }
 
 fn main() -> std::io::Result<()> {
-    let Args { fps, bg, fg, draw_mode, particle_count, speed, angle, depth, variation } = Args::parse();
+    let Args { fps, bg, fg, draw_mode, particle_count, speed, seed, angle, depth, variation } = Args::parse();
 
     let log_timeout = Duration::from_secs(5);
 
@@ -129,6 +133,7 @@ fn main() -> std::io::Result<()> {
             .depth(depth)
             .variation(variation)
             .speed(speed)
+            .seed(seed)
             .build();
 
     let mut termio = TermIO::from_tty()?;

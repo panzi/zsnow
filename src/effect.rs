@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, f32::consts::PI, time::Duration};
 
-use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
+use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D, xorshift::XOrShift32};
 
 pub trait Effect {
     fn animate(&mut self, screen: &Size2D, frame_duration: Duration, current_time: Duration);
@@ -18,6 +18,7 @@ pub struct SnowEffect {
     depth: f32,
     variation: f32,
     color: Rgb,
+    rand: XOrShift32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -28,7 +29,11 @@ pub struct SnowOptions {
     pub depth: f32,
     pub variation: f32,
     pub color: Rgb,
+    pub seed: u32,
 }
+
+/// some large-ish prime
+pub const RAND_INIT: u32 = 999999937;
 
 impl SnowOptions {
     #[inline]
@@ -40,6 +45,7 @@ impl SnowOptions {
             depth: 1.0,
             variation: 0.25,
             color: Rgb::from_u32(0xFFFFFF),
+            seed: RAND_INIT,
         }
     }
 
@@ -52,6 +58,12 @@ impl SnowOptions {
     #[inline]
     pub fn speed(&mut self, value: f32) -> &mut Self {
         self.speed = value;
+        self
+    }
+
+    #[inline]
+    pub fn seed(&mut self, value: u32) -> &mut Self {
+        self.seed = value;
         self
     }
 
@@ -113,6 +125,7 @@ impl SnowEffect {
             depth: options.depth,
             variation: options.variation,
             color: options.color,
+            rand: XOrShift32::new(options.seed),
         }
     }
 
@@ -187,7 +200,9 @@ impl Effect for SnowEffect {
             }
 
             if !p.alive {
-                let seed = (i as f32 / (n - 1) as f32 * width * 1.317 + t) % 1.0;
+                //let seed = (i as f32 / (n - 1) as f32 * width * 1.317 + t) % 1.0;
+                //let seed = unsafe { libc::rand() } as f32 / libc::RAND_MAX as f32;
+                let seed = self.rand.next_f32();
                 if t == 0.0 {
                     p.birth(seed, self.depth, self.variation, &self.velocity, screen);
                 } else {
@@ -269,9 +284,7 @@ impl Particle {
     }
 
     pub fn rebirth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
-        // XXX: broken!
-
-        // TODO: move this out of loop
+        // TODO: move things out of loop
         let spawn_dx = velocity.x;
         let spawn_dy = velocity.y;
 
