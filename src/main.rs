@@ -121,7 +121,7 @@ fn main() -> std::io::Result<()> {
     //    return Ok(());
     //}
 
-    let mut effect /*: Box<dyn Effect> = Box::new*/ = (
+    let mut effect /*: Box<dyn Effect> = Box::new*/ =
         SnowOptions::new()
             .color(fg)
             .particles(particle_count as usize)
@@ -129,8 +129,7 @@ fn main() -> std::io::Result<()> {
             .depth(depth)
             .variation(variation)
             .speed(speed)
-            .build()
-    );
+            .build();
 
     let mut termio = TermIO::from_tty()?;
     let frame_duration = Duration::from_secs(1) / fps;

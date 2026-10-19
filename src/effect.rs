@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, f32::consts::PI, time::Duration};
 
-use crate::{color::Rgb, matrix2d::Matrix2d, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
+use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D};
 
 pub trait Effect {
     fn animate(&mut self, screen: &Size2D, frame_duration: Duration, current_time: Duration);
@@ -184,7 +184,9 @@ impl Effect for SnowEffect {
                         p.alive = false;
                     }
                 }
-            } else {
+            }
+
+            if !p.alive {
                 let seed = (i as f32 / (n - 1) as f32 * width * 1.317 + t) % 1.0;
                 if t == 0.0 {
                     p.birth(seed, self.depth, self.variation, &self.velocity, screen);
@@ -267,113 +269,47 @@ impl Particle {
     }
 
     pub fn rebirth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
-        // scales sizes inversely to delta velocity
-        //let fwidth  = screen.width as f32 * velocity.y;
-        //let fheight = screen.height as f32 * velocity.x;
-        //let edge = fwidth + fheight;
-        //let spawn_pos = seed * edge;
-
         // XXX: broken!
 
-        // spawn plane
-        // 90° clockwise from velocity
         // TODO: move this out of loop
-        let spawn_dx = velocity.y;
-        let spawn_dy = -velocity.x;
+        let spawn_dx = velocity.x;
+        let spawn_dy = velocity.y;
 
-        let spawn_rad = spawn_dy.atan2(spawn_dx);
-        let mtx = Matrix2d::from_rotation(spawn_rad);
+        let border: u32 = 8;
+        let ext_width = border + screen.width as u32;
+        let virt_width = ext_width + screen.height as u32;
+        let area = (ext_width as f32 + virt_width as f32) * (border as f32);
 
-        let corners = [
-            (0.0, 0.0),
-            (screen.width as f32, 0.0),
-            (screen.width as f32, screen.height as f32),
-            (0.0, screen.height as f32),
-        ].map(|corner| &mtx * &corner);
+        let spawn_pixel = (area * seed) as u32;
 
-        let mut top_corner = (f32::NAN, f32::NAN);
-        let mut bottom_corner = (f32::NAN, f32::NAN);
-        let mut near_mid = (f32::NAN, f32::NAN);
+        // within the virtual area
+        let spawn_y = spawn_pixel / virt_width;
+        let spawn_x = spawn_pixel % virt_width;
 
-        {
-            let mut iter = corners.iter();
-            if let Some(&(x, y)) = iter.next() {
-                top_corner = (x, y);
-                bottom_corner = (x, y);
-                near_mid = (x, y);
-
-                for &(x, y) in iter {
-                    if y > top_corner.1 {
-                        top_corner = (x, y);
-                    }
-
-                    if y < bottom_corner.1 {
-                        bottom_corner = (x, y);
-                    }
-
-                    if x < near_mid.0 {
-                        near_mid = (x, y);
-                    }
-                }
-            }
-        }
-
-        let edge = top_corner.1 - bottom_corner.1;
-        let spawn_y = edge * seed;
-
-        // interpolate x
-        let spawn_x = if near_mid.1 < spawn_y {
-            near_mid.0 + (top_corner.0 - near_mid.0) * (top_corner.1 - spawn_y) / (top_corner.1 - near_mid.1)
+        // mapping to seperate horizontal/vertical areas
+        let (mut spawn_x, mut spawn_y) = if spawn_x >= ext_width {
+            // in vertical area
+            (spawn_y as f32, (spawn_x - ext_width) as f32)
         } else {
-            near_mid.0 + (bottom_corner.0 - near_mid.0) * (spawn_y - bottom_corner.1) / (near_mid.1 - bottom_corner.1)
+            // in horizontal area
+            (spawn_x as f32, spawn_y as f32)
         };
 
-        let (spawn_x, spawn_y) = &Matrix2d::from_rotation(-spawn_rad) * &(spawn_x, spawn_y);
+        // mapping to the correct side of the screen
+        if spawn_dx >= 0.0 {
+            spawn_x -= border as f32;
+        } else {
+            spawn_x += screen.width as f32;
+        }
+
+        if spawn_dy >= 0.0 {
+            spawn_y -= border as f32;
+        } else {
+            spawn_y += screen.height as f32;
+        }
 
         self.position.x = spawn_x;
         self.position.y = spawn_y;
-
-//        if velocity.x >= 0.0 {
-//            if velocity.y >= 0.0 {
-//                // spawn somewhere along left or top border
-//                if spawn_pos > fwidth {
-//                    self.position.x = 0.0;
-//                    self.position.y = (spawn_pos - fwidth) / velocity.x;
-//                } else {
-//                    self.position.x = spawn_pos / velocity.y;
-//                    self.position.y = 0.0;
-//                }
-//            } else {
-//                // spawn somewhere along left or bottom border
-//                if spawn_pos > fwidth {
-//                    self.position.x = 0.0;
-//                    self.position.y = (spawn_pos - fwidth) / velocity.x;
-//                } else {
-//                    self.position.x = spawn_pos / velocity.y;
-//                    self.position.y = screen.height as f32;
-//                }
-//            }
-//        } else {
-//            if velocity.y >= 0.0 {
-//                // spawn somewhere along right or top border
-//                if spawn_pos > fwidth {
-//                    self.position.x = screen.width as f32;
-//                    self.position.y = (spawn_pos - fwidth) / velocity.x;
-//                } else {
-//                    self.position.x = spawn_pos / velocity.y;
-//                    self.position.y = 0.0;
-//                }
-//            } else {
-//                // spawn somewhere along right or bottom border
-//                if spawn_pos > fwidth {
-//                    self.position.x = screen.width as f32;
-//                    self.position.y = (spawn_pos - fwidth) / velocity.x;
-//                } else {
-//                    self.position.x = spawn_pos / velocity.y;
-//                    self.position.y = screen.height as f32;
-//                }
-//            }
-//        }
 
         self.init_z(seed, depth, velocity);
         self.init_velocity(seed, variation, velocity);
