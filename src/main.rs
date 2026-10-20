@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, thread::sleep, time::{Duration, Instant}};
 
-use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, fill::Fill, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
+use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, fill::Fill, point3d::Point3D, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
 
 use clap::Parser;
 
@@ -89,11 +89,11 @@ struct Args {
     #[clap(long, default_value_t = 16.0)]
     speed: f32,
 
-    #[clap(long, default_value_t = effect::RAND_INIT)]
+    #[clap(long, default_value_t = effect::DEFAULT_RANDOM_SEED)]
     seed: u32,
 
-    #[clap(long, default_value_t = 30.0)]
-    angle: f32,
+    #[clap(long, default_value_t = effect::DEFAULT_VELOCITY)]
+    velocity: Point3D,
 
     #[clap(long, default_value_t = 1.0)]
     depth: f32,
@@ -116,7 +116,7 @@ impl LogEntry {
 }
 
 fn main() -> std::io::Result<()> {
-    let Args { fps, bg, fg, draw_mode, particle_count, speed, seed, angle, depth, variation } = Args::parse();
+    let Args { fps, bg, fg, draw_mode, particle_count, speed, seed, velocity, depth, variation } = Args::parse();
 
     let log_timeout = Duration::from_secs(5);
 
@@ -129,7 +129,7 @@ fn main() -> std::io::Result<()> {
         SnowOptions::new()
             .color(fg)
             .particles(particle_count as usize)
-            .angle_grad(angle)
+            .velocity(&velocity)
             .depth(depth)
             .variation(variation)
             .speed(speed)
@@ -165,10 +165,14 @@ fn main() -> std::io::Result<()> {
     let mut paused = false;
     let mut osd = true;
 
-    let rad = angle * std::f32::consts::PI / 180.0;
     log.push_back(LogEntry {
         timestamp: ts_frame_start,
-        message: format!("angle: {angle}°, dx={:.3}, dy={:.3}", rad.cos(), rad.sin()),
+        message: format!("screen size: {} x {}", frame.size().width, frame.size().height),
+    });
+
+    log.push_back(LogEntry {
+        timestamp: ts_frame_start,
+        message: format!("velocity: dx={:.3}, dy={:.3}, dz={:.3}", velocity.x, velocity.y, velocity.z),
     });
 
     loop {

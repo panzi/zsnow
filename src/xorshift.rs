@@ -3,6 +3,8 @@ pub struct XOrShift32 {
     state: u32,
 }
 
+const F32_SCALE: f32 = 1.0 / u32::MAX as f32;
+
 impl XOrShift32 {
     /// Must be initialized with non-zero.
     #[inline]
@@ -19,8 +21,9 @@ impl XOrShift32 {
         state
     }
 
+    #[inline]
     pub fn next_f32(&mut self) -> f32 {
-        self.next() as f32 / u32::MAX as f32
+        self.next() as f32 * F32_SCALE
     }
 
     #[inline]

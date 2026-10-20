@@ -25,7 +25,7 @@ pub struct SnowEffect {
 pub struct SnowOptions {
     pub particles: usize,
     pub speed: f32,
-    pub angle: f32,
+    pub velocity: Point3D,
     pub depth: f32,
     pub variation: f32,
     pub color: Rgb,
@@ -33,19 +33,29 @@ pub struct SnowOptions {
 }
 
 /// some large-ish prime
-pub const RAND_INIT: u32 = 999999937;
+pub const DEFAULT_RANDOM_SEED: u32 = 999999937;
+pub const DEFAULT_VELOCITY: Point3D = Point3D {
+    x: 0.8660254037844387,
+    y: 0.49999999999999994,
+    z: 0.0,
+};
 
 impl SnowOptions {
     #[inline]
     pub fn new() -> Self {
+        let angle = PI * 30.0 / 180.0;
         Self {
             particles: 32,
             speed: 16.0,
-            angle: PI * 30.0 / 180.0,
+            velocity: Point3D {
+                x: angle.cos(),
+                y: angle.sin(),
+                z: 0.0,
+            },
             depth: 1.0,
             variation: 0.25,
             color: Rgb::from_u32(0xFFFFFF),
-            seed: RAND_INIT,
+            seed: DEFAULT_RANDOM_SEED,
         }
     }
 
@@ -68,14 +78,8 @@ impl SnowOptions {
     }
 
     #[inline]
-    pub fn angle_rad(&mut self, value: f32) -> &mut Self {
-        self.angle = value;
-        self
-    }
-
-    #[inline]
-    pub fn angle_grad(&mut self, value: f32) -> &mut Self {
-        self.angle = value * PI / 180.0;
+    pub fn velocity(&mut self, value: &Point3D) -> &mut Self {
+        self.velocity = *value;
         self
     }
 
@@ -116,11 +120,7 @@ impl SnowEffect {
         Self {
             particles: vec![Particle::default(); options.particles],
             draw_order: (0..options.particles).collect(),
-            velocity: Point3D {
-                x: options.angle.cos(),
-                y: options.angle.sin(),
-                z: 0.0,
-            },
+            velocity: options.velocity,
             speed: options.speed,
             depth: options.depth,
             variation: options.variation,
@@ -170,9 +170,11 @@ impl Effect for SnowEffect {
         let width = screen.width as f32;
         let height = screen.height as f32;
 
-        let n = self.particles.len();
+        //let angle = (t * 0.01) % std::f32::consts::TAU;
+        //self.velocity.x = angle.cos();
+        //self.velocity.y = angle.sin();
 
-        for (i, p) in self.particles.iter_mut().enumerate() {
+        for p in self.particles.iter_mut() {
             if p.alive {
                 p.position.x += p.velocity.x * dt;
                 p.position.y += p.velocity.y * dt;
@@ -200,8 +202,6 @@ impl Effect for SnowEffect {
             }
 
             if !p.alive {
-                //let seed = (i as f32 / (n - 1) as f32 * width * 1.317 + t) % 1.0;
-                //let seed = unsafe { libc::rand() } as f32 / libc::RAND_MAX as f32;
                 let seed = self.rand.next_f32();
                 if t == 0.0 {
                     p.birth(seed, self.depth, self.variation, &self.velocity, screen);
@@ -285,44 +285,51 @@ impl Particle {
 
     pub fn rebirth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
         // TODO: move things out of loop
-        let spawn_dx = velocity.x;
-        let spawn_dy = velocity.y;
+        let vx = velocity.x;
+        let vy = velocity.y;
 
-        let border: u32 = 8;
-        let ext_width = border + screen.width as u32;
-        let virt_width = ext_width + screen.height as u32;
-        let area = (ext_width as f32 + virt_width as f32) * (border as f32);
-
-        let spawn_pixel = (area * seed) as u32;
-
-        // within the virtual area
-        let spawn_y = spawn_pixel / virt_width;
-        let spawn_x = spawn_pixel % virt_width;
-
-        // mapping to seperate horizontal/vertical areas
-        let (mut spawn_x, mut spawn_y) = if spawn_x >= ext_width {
-            // in vertical area
-            (spawn_y as f32, (spawn_x - ext_width) as f32)
+        if vx == 0.0 {
+            self.position.x = seed * screen.width as f32;
+            self.position.y = if vy >= 0.0 { 0.0 } else { screen.height as f32 - 1.0 };
+        } else if vy == 0.0 {
+            self.position.x = if vx >= 0.0 { 0.0 } else { screen.width as f32 - 1.0 };
+            self.position.y = seed * screen.height as f32;
         } else {
-            // in horizontal area
-            (spawn_x as f32, spawn_y as f32)
-        };
+            let border: f32 = 8.0;
+            let ext_width = border + screen.width as f32;// * spawn_dy;
+            let virt_width = ext_width + screen.height as f32;// * spawn_dx;
+            let area = (ext_width as f32 + virt_width as f32) * (border as f32);
 
-        // mapping to the correct side of the screen
-        if spawn_dx >= 0.0 {
-            spawn_x -= border as f32;
-        } else {
-            spawn_x += screen.width as f32;
+            let spawn_pixel = area * seed;
+
+            // within the virtual area
+            let mut spawn_y = (spawn_pixel / virt_width).floor();
+            let mut spawn_x = spawn_pixel - spawn_y;
+
+            // mapping to seperate horizontal/vertical areas
+            if spawn_x >= ext_width {
+                // in vertical area
+                //(spawn_y as f32 / spawn_dy, ((spawn_x - ext_width) as f32) / spawn_dx)
+                let x = spawn_y;
+                spawn_y = spawn_x - ext_width;
+                spawn_x = x;
+
+                if vx >= 0.0 {
+                    spawn_x -= border;
+                } else {
+                    spawn_x += screen.width as f32;
+                }
+            } else {
+                if vy >= 0.0 {
+                    spawn_y -= border;
+                } else {
+                    spawn_y += screen.height as f32;
+                }
+            }
+
+            self.position.x = spawn_x;
+            self.position.y = spawn_y;
         }
-
-        if spawn_dy >= 0.0 {
-            spawn_y -= border as f32;
-        } else {
-            spawn_y += screen.height as f32;
-        }
-
-        self.position.x = spawn_x;
-        self.position.y = spawn_y;
 
         self.init_z(seed, depth, velocity);
         self.init_velocity(seed, variation, velocity);

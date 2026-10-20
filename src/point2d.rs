@@ -154,3 +154,10 @@ impl MulAssign<f32> for Point2D {
         self.y *= rhs;
     }
 }
+
+impl std::fmt::Display for Point2D {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.x, self.y)
+    }
+}
