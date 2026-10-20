@@ -304,7 +304,7 @@ impl Particle {
 
             // within the virtual area
             let mut spawn_y = (spawn_pixel / virt_width).floor();
-            let mut spawn_x = spawn_pixel - spawn_y;
+            let mut spawn_x = (spawn_pixel % virt_width).floor();
 
             // mapping to seperate horizontal/vertical areas
             if spawn_x >= ext_width {
