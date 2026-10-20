@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, thread::sleep, time::{Duration, Instant}};
 
-use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, fill::Fill, point3d::Point3D, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO};
+use crate::{color::Rgb, draw_mode::DrawMode, effect::{Effect, SnowOptions}, event::{Event, Key}, fill::Fill, point3d::Point3D, rgb_image::RgbImage, term_frame::TermFrame, termio::TermIO, wind::Gusts};
 
 use clap::Parser;
 
@@ -14,6 +14,7 @@ pub mod fill;
 pub mod event;
 pub mod matrix2d;
 pub mod matrix3d;
+pub mod parse;
 pub mod point2d;
 pub mod point3d;
 pub mod rect;
@@ -23,6 +24,7 @@ pub mod style;
 pub mod term_frame;
 pub mod termio;
 pub mod unicode;
+pub mod wind;
 pub mod xorshift;
 
 //// debug input
@@ -100,6 +102,9 @@ struct Args {
 
     #[clap(long, default_value_t = 0.25)]
     variation: f32,
+
+    #[clap(long, default_value = "6s linear 3 0.2 0, 7s linear 30deg, 5s linear -2 1 0, 6s linear 90deg, 12s linear 2 1 0")]
+    gusts: Gusts,
 }
 
 #[derive(Debug)]
@@ -116,7 +121,7 @@ impl LogEntry {
 }
 
 fn main() -> std::io::Result<()> {
-    let Args { fps, bg, fg, draw_mode, particle_count, speed, seed, velocity, depth, variation } = Args::parse();
+    let Args { fps, bg, fg, draw_mode, particle_count, speed, seed, velocity, depth, variation, gusts } = Args::parse();
 
     let log_timeout = Duration::from_secs(5);
 
@@ -134,6 +139,7 @@ fn main() -> std::io::Result<()> {
             .variation(variation)
             .speed(speed)
             .seed(seed)
+            .gusts(&gusts.0)
             .build();
 
     let mut termio = TermIO::from_tty()?;

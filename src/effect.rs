@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, f32::consts::PI, time::Duration};
 
-use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D, xorshift::XOrShift32};
+use crate::{color::Rgb, point3d::Point3D, rgb_image::RgbImage, size2d::Size2D, wind::Gust, xorshift::XOrShift32};
 
 pub trait Effect {
     fn animate(&mut self, screen: &Size2D, frame_duration: Duration, current_time: Duration);
@@ -19,10 +19,13 @@ pub struct SnowEffect {
     variation: f32,
     color: Rgb,
     rand: XOrShift32,
+    gusts: Vec<(Duration, Gust)>,
+    next_gust_index: usize,
+    last_gust_at: Duration,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct SnowOptions {
+#[derive(Debug, Clone, PartialEq)]
+pub struct SnowOptions<'a> {
     pub particles: usize,
     pub speed: f32,
     pub velocity: Point3D,
@@ -30,6 +33,7 @@ pub struct SnowOptions {
     pub variation: f32,
     pub color: Rgb,
     pub seed: u32,
+    pub gusts: Option<&'a [(Duration, Gust)]>,
 }
 
 /// some large-ish prime
@@ -40,7 +44,7 @@ pub const DEFAULT_VELOCITY: Point3D = Point3D {
     z: 0.0,
 };
 
-impl SnowOptions {
+impl<'a> SnowOptions<'a> {
     #[inline]
     pub fn new() -> Self {
         let angle = PI * 30.0 / 180.0;
@@ -56,6 +60,7 @@ impl SnowOptions {
             variation: 0.25,
             color: Rgb::from_u32(0xFFFFFF),
             seed: DEFAULT_RANDOM_SEED,
+            gusts: None,
         }
     }
 
@@ -105,9 +110,15 @@ impl SnowOptions {
     pub fn build(&self) -> SnowEffect {
         SnowEffect::new(self)
     }
+
+    #[inline]
+    pub fn gusts(&mut self, value: &'a [(Duration, Gust)]) -> &mut Self {
+        self.gusts = Some(value);
+        self
+    }
 }
 
-impl Default for SnowOptions {
+impl<'a> Default for SnowOptions<'a> {
     #[inline]
     fn default() -> Self {
         Self::new()
@@ -126,6 +137,9 @@ impl SnowEffect {
             variation: options.variation,
             color: options.color,
             rand: XOrShift32::new(options.seed),
+            gusts: options.gusts.unwrap_or(&[]).into(),
+            next_gust_index: 0,
+            last_gust_at: Duration::ZERO,
         }
     }
 
@@ -170,6 +184,33 @@ impl Effect for SnowEffect {
         let width = screen.width as f32;
         let height = screen.height as f32;
 
+        if !self.gusts.is_empty() {
+            let index = self.next_gust_index;
+            let (next_dt, next_gust) = &self.gusts[index];
+
+            let next_time = self.last_gust_at + *next_dt;
+            if current_time >= next_time {
+                match next_gust {
+                    Gust::Linear { velocity } => {
+                        self.velocity = *velocity;
+
+                        for p in &mut self.particles {
+                            p.velocity += velocity;
+                        }
+                    }
+                    Gust::Radial { center, strength } => {
+                        // TODO: radial gusts!
+                    }
+                }
+
+                self.last_gust_at = current_time;
+                self.next_gust_index += 1;
+                if self.next_gust_index >= self.gusts.len() {
+                    self.next_gust_index = 0;
+                }
+            }
+        }
+
         //let angle = (t * 0.01) % std::f32::consts::TAU;
         //self.velocity.x = angle.cos();
         //self.velocity.y = angle.sin();
@@ -203,6 +244,7 @@ impl Effect for SnowEffect {
 
             if !p.alive {
                 let seed = self.rand.next_f32();
+                // TODO: radial gusts!
                 if t == 0.0 {
                     p.birth(seed, self.depth, self.variation, &self.velocity, screen);
                 } else {
@@ -271,7 +313,7 @@ impl Particle {
     }
 
     pub fn birth(&mut self, seed: f32, depth: f32, variation: f32, velocity: &Point3D, screen: &Size2D) {
-        let fwidth = screen.width as f32;
+        let fwidth  = screen.width  as f32;
         let fheight = screen.height as f32;
 
         self.position.x = fwidth  * ((seed * 100.17) % 1.0);
@@ -289,6 +331,10 @@ impl Particle {
         let vy = velocity.y;
 
         if vx == 0.0 {
+            if vy == 0.0 {
+                return self.birth(seed, depth, variation, velocity, screen);
+            }
+
             self.position.x = seed * screen.width as f32;
             self.position.y = if vy >= 0.0 { 0.0 } else { screen.height as f32 - 1.0 };
         } else if vy == 0.0 {
